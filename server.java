@@ -13,10 +13,8 @@ import java.sql.Statement;
 public class server {
 	public static void main(String args[]) throws Exception {
 		ServerSocket sock = new ServerSocket(3001);
-		Thread[] T = new Thread[10];
 		int tCount = 0;
-		boolean[] threads = new boolean[10];
-		LinkedBlockingQueue<SQLUpdate> q = new LinkedBlockingQueue<SQLUpdate>(40); //40 things can be in queu
+		LinkedBlockingQueue<SQLUpdate> q = new LinkedBlockingQueue<SQLUpdate>(40); //40 things can be in queue, that way we don't have too much concurrency
 		Thread sqlThread = new Thread(new SQLHandler("jdbc:MySql://localhost/devicefinder_development", args[0], args[1], q));
 		sqlThread.start();
 		for (int i = 0; i < 10; i++) {
@@ -24,31 +22,11 @@ public class server {
 		}
 
 		
-		
 		while (true) {
-			if (tCount < 10) {
-				Socket mySock = sock.accept();
-				int i;
-				for (i = 0; i < 10; i++) {
-					if (!threads[i]) {
-						threads[i] = true;
-						break;
-					}
-				}
-				T[i] = new Thread(new ServerHandler(mySock, i, q));
-				T[i].start(); //start thread handler
-				tCount++; //increment thread count
-			} else {
-				int i;
-				for (i = 0; i < 10; i++) {
-					if (T[i].getState() == Thread.State.TERMINATED) {
-						T[i].join(); //clean up if works like process
-						threads[i] = false; //free up a connection
-						tCount--; //decrement count
-						System.out.println("Connection " + i + " terminated");
-					}
-				}
-			}
+			
+			Socket mySock = sock.accept();
+			new Thread(new ServerHandler(mySock, tCount, q)).start();
+			tCount++;
 		}
 	}
 }
