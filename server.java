@@ -17,13 +17,10 @@ public class server {
 		LinkedBlockingQueue<SQLUpdate> q = new LinkedBlockingQueue<SQLUpdate>(40); //40 things can be in queue, that way we don't have too much concurrency
 		Thread sqlThread = new Thread(new SQLHandler("jdbc:MySql://localhost/devicefinder_development", args[0], args[1], q));
 		sqlThread.start();
-		for (int i = 0; i < 10; i++) {
-			threads[i] = false; // no threads
-		}
 
-		
+
 		while (true) {
-			
+
 			Socket mySock = sock.accept();
 			new Thread(new ServerHandler(mySock, tCount, q)).start();
 			tCount++;
@@ -40,11 +37,11 @@ class ServerHandler implements Runnable {
 		connectionNumber = n;
 		q = queue;
 	}
-	
+
 	public void run() {
 		BufferedReader in;
 		try {
-			
+
 			in = new BufferedReader(new InputStreamReader(mSock.getInputStream()));
 		} catch (Exception e) {
 			in = null;
@@ -61,31 +58,13 @@ class ServerHandler implements Runnable {
 		String em = tokens[1];
 		String lat = tokens[2];
 		String lng = tokens[3];
-		if (id == 0) {
-			try {
-				Class.forName("com.mysql.jdbc.Driver");
-				Connection cn = DriverManager.getConnection("jdbc:MySql://localhost/devicefinder_development", "root", "3jYyzw{p");
-				Statement st = cn.createStatement();
-				//st.executeQuery("INSERT INTO devices (deviceNum) VALUES ('1');");
-				st.executeUpdate("insert into devices (deviceNum, created_at, updated_at) VALUES ('1', '2016-10-23 18:25:07', '2016-10-23 18:25:07')");
-				ResultSet rs = st.executeQuery("select * from devices;");
-				if (rs.last()) id = rs.getInt("id");
-				if (rs != null) rs.close();
-				if (st != null) st.close();
-				if (cn != null) cn.close();
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(0);
-			}
-		}
-		
 		SQLUpdate upd = new SQLUpdate(id, em, lat, lng);
-		try {
+		try { //wait for sql thread to return device id for phone to save
 			synchronized(upd) {
 				q.put(upd);
 				upd.wait();
 			}
-			
+
 		} catch (Exception e) {
 			System.out.println("Error putting to queue");
 		}
@@ -134,7 +113,7 @@ class SQLHandler implements Runnable {
 		password = pass;
 		q = queue;
 	}
-	
+
 	public void run() {
 		try {
 			Class.forName("com.mysql.jdbc.Driver");
@@ -172,6 +151,26 @@ class SQLHandler implements Runnable {
 
 							}
 							rs.updateRow();
+						} else { //no entry for the current device id... you're gonna have to create a new one
+							st.executeUpdate("insert into devices (deviceNum, created_at, updated_at) VALUES ('1', '2016-10-23 18:25:07', '2016-10-23 18:25:07')");
+							rs = st.executeQuery("Select * from devices ORDER BY id DESC LIMIT 1;");
+							if (rs.next()){ //inserted successfully
+								upd.phoneId = rs.getInt("id");
+								rs.updateString("lat", upd.lat);
+								rs.updateString("long", upd.lng);
+								if (upd.email != null) {
+									Statement s2 = con.createStatement();
+									ResultSet rs2 = s2.executeQuery("SELECT * FROM users where email like \"" + upd.email + "\";");
+									if (rs2.next()) {
+										rs.updateInt("user_id", rs2.getInt("id"));
+									}
+									if (rs2 != null) rs2.close();
+									if (s2 != null) s2.close();
+								}
+								rs.updateRow();
+							} else {
+								upd.phoneId = -1; //error inserting into table maybe?
+							}
 						}
 					} catch (Exception e) {
 						System.out.print("Server Crashed");
