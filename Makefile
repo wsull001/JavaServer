@@ -2,7 +2,7 @@ all: SqlTest.java
 	javac -classpath .:/usr/share/java/mysql.jar SqlTest.java
 
 run:
-	java -classpath .:/usr/share/java/mysql.jar server team1 wheresmyphone1
+	java -classpath .:/usr/share/java/mysql.jar server root 3jYyzw{p
 server: server.java
 	javac -classpath .:/usr/share/java/mysql.jar server.java
 clean:
